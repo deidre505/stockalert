@@ -106,9 +106,8 @@ def process_alert(alert, stock, current_price):
 def send_notification(stock, alert_type, current_price, benchmark_price):
     """Sends a notification for a triggered alert."""
     notification_service = db.get_setting("notification_service")
-    api_key = db.get_setting("api_key")
 
-    if not notification_service or not api_key or notification_service == "None":
+    if not notification_service or notification_service == "None":
         return
 
     stock_id, ticker, _, _, currency = stock
@@ -121,15 +120,21 @@ def send_notification(stock, alert_type, current_price, benchmark_price):
         message = f"{ticker} has risen to {symbol}{current_price:,.2f} from a recent low of {symbol}{benchmark_price:,.2f}."
 
     if notification_service == "Pushover":
-        # Note: Pushover requires two keys, but we are only storing one in the database.
-        # This will need to be addressed in a future version.
-        print("Sending Pushover notification...")
-        # user_key = db.get_setting("pushover_user_key") # Example of what might be needed
-        # if user_key:
-        #     notifier.send_pushover_notification(user_key, api_key, title, message)
+        user_key = db.get_setting("pushover_user_key")
+        api_token = db.get_setting("pushover_api_token")
+        if user_key and api_token:
+            print(f"Sending Pushover notification: {title} - {message}")
+            notifier.send_pushover_notification(user_key, api_token, title, message)
+        else:
+            print("Pushover notification failed: User Key or API Token not set.")
+
     elif notification_service == "Pushbullet":
-        print(f"Sending Pushbullet notification: {title} - {message}")
-        notifier.send_pushbullet_notification(api_key, title, message)
+        api_token = db.get_setting("pushbullet_api_token")
+        if api_token:
+            print(f"Sending Pushbullet notification: {title} - {message}")
+            notifier.send_pushbullet_notification(api_token, title, message)
+        else:
+            print("Pushbullet notification failed: Access Token not set.")
 
 def start_alerter_thread():
     """Starts the alerter thread."""

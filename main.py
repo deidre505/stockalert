@@ -351,33 +351,64 @@ class StockApp(ctk.CTk):
     def setup_settings_tab(self):
         tab = self.tab_view.tab("Settings")
 
-        ctk.CTkLabel(tab, text="Notification Service:").pack(pady=(20, 5))
+        # --- Main Settings Frame ---
+        settings_frame = ctk.CTkFrame(tab)
+        settings_frame.pack(padx=20, pady=20, fill="x")
+
+        # --- Notification Service ---
+        ctk.CTkLabel(settings_frame, text="Notification Service:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
         self.notification_service_optionmenu = ctk.CTkOptionMenu(
-            tab, 
+            settings_frame,
             values=["None", "Pushover", "Pushbullet"],
             command=self.on_notification_service_change
         )
-        self.notification_service_optionmenu.pack(pady=5)
+        self.notification_service_optionmenu.grid(row=0, column=1, padx=10, pady=10, sticky="w")
 
-        ctk.CTkLabel(tab, text="API Key / Access Token:").pack(pady=(10, 5))
-        self.api_key_entry = ctk.CTkEntry(tab, width=300, placeholder_text="Enter your API Key or Access Token")
-        self.api_key_entry.pack(pady=5)
+        # --- Dynamic API Key Frame ---
+        self.api_key_frame = ctk.CTkFrame(settings_frame)
+        self.api_key_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(tab, text="Dashboard Refresh Interval (seconds):").pack(pady=(10, 5))
-        self.refresh_interval_entry = ctk.CTkEntry(tab, width=100, placeholder_text="e.g., 300")
-        self.refresh_interval_entry.pack(pady=5)
+        # --- Pushover Fields ---
+        self.pushover_user_key_label = ctk.CTkLabel(self.api_key_frame, text="Pushover User Key:")
+        self.pushover_user_key_entry = ctk.CTkEntry(self.api_key_frame, width=350)
+        self.pushover_api_token_label = ctk.CTkLabel(self.api_key_frame, text="Pushover API Token:")
+        self.pushover_api_token_entry = ctk.CTkEntry(self.api_key_frame, width=350)
 
+        # --- Pushbullet Fields ---
+        self.pushbullet_token_label = ctk.CTkLabel(self.api_key_frame, text="Pushbullet Access Token:")
+        self.pushbullet_token_entry = ctk.CTkEntry(self.api_key_frame, width=350)
+
+        # --- Dashboard Refresh Interval ---
+        ctk.CTkLabel(settings_frame, text="Dashboard Refresh Interval (seconds):").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        self.refresh_interval_entry = ctk.CTkEntry(settings_frame, placeholder_text="e.g., 300")
+        self.refresh_interval_entry.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+        
+        settings_frame.grid_columnconfigure(1, weight=1)
+
+        # --- Save Button ---
         save_settings_button = ctk.CTkButton(tab, text="Save Settings", command=self.save_settings)
-        save_settings_button.pack(pady=20)
+        save_settings_button.pack(padx=20, pady=20)
 
         self.load_settings()
+        self.on_notification_service_change(self.notification_service_optionmenu.get())
 
     def on_notification_service_change(self, choice):
-        pass
+        for widget in self.api_key_frame.winfo_children():
+            widget.grid_remove()
+
+        if choice == "Pushover":
+            self.pushover_user_key_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+            self.pushover_user_key_entry.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+            self.pushover_api_token_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+            self.pushover_api_token_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+        elif choice == "Pushbullet":
+            self.pushbullet_token_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+            self.pushbullet_token_entry.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        
+        self.api_key_frame.grid_columnconfigure(1, weight=1)
 
     def save_settings(self):
         service = self.notification_service_optionmenu.get()
-        api_key = self.api_key_entry.get()
         refresh_interval_str = self.refresh_interval_entry.get()
 
         try:
@@ -390,8 +421,14 @@ class StockApp(ctk.CTk):
 
         try:
             db.save_setting("notification_service", service)
-            db.save_setting("api_key", api_key)
             db.save_setting("dashboard_refresh_interval", str(refresh_interval))
+
+            if service == "Pushover":
+                db.save_setting("pushover_user_key", self.pushover_user_key_entry.get())
+                db.save_setting("pushover_api_token", self.pushover_api_token_entry.get())
+            elif service == "Pushbullet":
+                db.save_setting("pushbullet_api_token", self.pushbullet_token_entry.get())
+
             messagebox.showinfo("Success", "Settings saved successfully.")
             self.stop_dashboard_refresh_thread()
             self.start_dashboard_refresh_thread()
@@ -400,14 +437,22 @@ class StockApp(ctk.CTk):
 
     def load_settings(self):
         service = db.get_setting("notification_service")
-        api_key = db.get_setting("api_key")
-        refresh_interval = db.get_setting("dashboard_refresh_interval")
-
         if service:
             self.notification_service_optionmenu.set(service)
-        if api_key:
-            self.api_key_entry.delete(0, ctk.END)
-            self.api_key_entry.insert(0, api_key)
+
+        pushover_user_key = db.get_setting("pushover_user_key")
+        if pushover_user_key:
+            self.pushover_user_key_entry.insert(0, pushover_user_key)
+            
+        pushover_api_token = db.get_setting("pushover_api_token")
+        if pushover_api_token:
+            self.pushover_api_token_entry.insert(0, pushover_api_token)
+
+        pushbullet_token = db.get_setting("pushbullet_api_token")
+        if pushbullet_token:
+            self.pushbullet_token_entry.insert(0, pushbullet_token)
+
+        refresh_interval = db.get_setting("dashboard_refresh_interval")
         if refresh_interval:
             self.refresh_interval_entry.delete(0, ctk.END)
             self.refresh_interval_entry.insert(0, refresh_interval)
