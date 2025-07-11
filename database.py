@@ -12,6 +12,7 @@ def get_connection():
 def initialize_database():
     """
     Initializes the database and creates the necessary tables if they don't exist.
+    Also handles migrating the schema if needed.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -22,9 +23,19 @@ def initialize_database():
             id INTEGER PRIMARY KEY,
             ticker TEXT NOT NULL UNIQUE,
             shares REAL,
-            purchase_price REAL
+            purchase_price REAL,
+            currency TEXT
         )
     """)
+
+    # --- Schema Migration ---
+    # Add currency column to stocks table if it doesn't exist
+    try:
+        cursor.execute("SELECT currency FROM stocks LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating database: Adding 'currency' column to stocks table.")
+        cursor.execute("ALTER TABLE stocks ADD COLUMN currency TEXT")
+
 
     # Create alerts table
     cursor.execute("""
@@ -60,12 +71,12 @@ def initialize_database():
 
 # --- Stock Functions ---
 
-def add_stock(ticker, shares, purchase_price):
+def add_stock(ticker, shares, purchase_price, currency):
     """Adds a new stock to the database."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO stocks (ticker, shares, purchase_price) VALUES (?, ?, ?)", 
-                   (ticker.upper(), shares, purchase_price))
+    cursor.execute("INSERT OR REPLACE INTO stocks (ticker, shares, purchase_price, currency) VALUES (?, ?, ?, ?)",
+                   (ticker.upper(), shares, purchase_price, currency))
     conn.commit()
     conn.close()
 
@@ -73,7 +84,7 @@ def get_all_stocks():
     """Retrieves all stocks from the database."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, ticker, shares, purchase_price FROM stocks ORDER BY ticker")
+    cursor.execute("SELECT id, ticker, shares, purchase_price, currency FROM stocks ORDER BY ticker")
     stocks = cursor.fetchall()
     conn.close()
     return stocks
@@ -130,7 +141,8 @@ def get_stock_by_id(stock_id):
     """Retrieves a single stock by its ID."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM stocks WHERE id = ?", (stock_id,))
+    # Select all columns explicitly to ensure order
+    cursor.execute("SELECT id, ticker, shares, purchase_price, currency FROM stocks WHERE id = ?", (stock_id,))
     stock = cursor.fetchone()
     conn.close()
     return stock
