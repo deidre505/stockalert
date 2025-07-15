@@ -26,6 +26,7 @@ def get_currency_symbol(currency_code):
 
 class StockApp(ctk.CTk):
     is_running = False
+    is_quitting = False
     def __init__(self):
         super().__init__()
         StockApp.is_running = True
@@ -69,6 +70,7 @@ class StockApp(ctk.CTk):
         self.icon = None
         self.create_tray_icon()
         self.is_quitting = False
+        self.is_quitting = False
 
     def create_tray_icon(self):
         image = Image.open("icon.png") # Ensure icon.png is in the same directory
@@ -78,17 +80,16 @@ class StockApp(ctk.CTk):
         self.icon.run_detached()
 
     def show_window(self, icon, item):
-        # Check if the Tkinter window still exists and is not destroyed
-        if self.winfo_exists():
+        if not self.is_quitting and self.winfo_exists():
             self.after(0, self.deiconify)
         else:
-            # If the window is destroyed, stop the icon as it shouldn't be active
+            # If the window is destroyed or quitting, stop the icon as it shouldn't be active
             icon.stop()
 
     def quit_application(self, icon, item):
+        self.is_quitting = True # Signal that the app is quitting
         icon.stop()
-        StockApp.is_running = False # Set flag before destroying
-        self.destroy()
+        self.after(100, self.destroy) # Schedule destroy after a short delay
 
     def _on_closing(self):
         self._save_column_settings()
@@ -103,11 +104,12 @@ class StockApp(ctk.CTk):
         if should_minimize_to_tray:
             self.withdraw() # Hide the window instead of destroying it
         else:
+            self.is_quitting = True # Signal that the app is quitting
             # If not minimizing to tray, stop the pystray icon before destroying the main window
             if self.icon:
                 self.icon.stop()
                 self.icon = None # Clear the reference to the icon
-            self.destroy()
+            self.after(100, self.destroy) # Schedule destroy after a short delay
 
     def _save_column_settings(self):
         try:
