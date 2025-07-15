@@ -9,6 +9,9 @@ from tkinter import messagebox, ttk
 from collections import defaultdict
 import queue
 import json
+from PIL import Image
+import pystray
+from datetime import datetime
 
 def get_currency_symbol(currency_code):
     """Returns the currency symbol for a given currency code."""
@@ -22,8 +25,10 @@ def get_currency_symbol(currency_code):
     return symbols.get(currency_code, f"{currency_code} ")
 
 class StockApp(ctk.CTk):
+    is_running = False
     def __init__(self):
         super().__init__()
+        StockApp.is_running = True
 
         self.title("Stock Alert Dashboard")
         self.geometry("1200x800")
@@ -60,9 +65,49 @@ class StockApp(ctk.CTk):
         self.check_ui_alert_queue()
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
+        # System tray icon setup
+        self.icon = None
+        self.create_tray_icon()
+        self.is_quitting = False
+
+    def create_tray_icon(self):
+        image = Image.open("icon.png") # Ensure icon.png is in the same directory
+        menu = (pystray.MenuItem('Show', self.show_window),
+                pystray.MenuItem('Quit', self.quit_application))
+        self.icon = pystray.Icon("Stock Alert", image, "Stock Alert", menu, on_double_click=self.show_window)
+        self.icon.run_detached()
+
+    def show_window(self, icon, item):
+        # Check if the Tkinter window still exists and is not destroyed
+        if self.winfo_exists():
+            self.after(0, self.deiconify)
+        else:
+            # If the window is destroyed, stop the icon as it shouldn't be active
+            icon.stop()
+
+    def quit_application(self, icon, item):
+        icon.stop()
+        StockApp.is_running = False # Set flag before destroying
+        self.destroy()
+
     def _on_closing(self):
         self._save_column_settings()
-        self.destroy()
+        
+        # Get the current state of the minimize_to_tray switch directly
+        should_minimize_to_tray = self.minimize_to_tray_switch.get()
+
+        # Save this state to the database for future sessions
+        db.save_setting("minimize_to_tray", str(should_minimize_to_tray))
+        print(f"Minimize to tray setting: {should_minimize_to_tray}")
+
+        if should_minimize_to_tray:
+            self.withdraw() # Hide the window instead of destroying it
+        else:
+            # If not minimizing to tray, stop the pystray icon before destroying the main window
+            if self.icon:
+                self.icon.stop()
+                self.icon = None # Clear the reference to the icon
+            self.destroy()
 
     def _save_column_settings(self):
         try:
@@ -157,6 +202,10 @@ class StockApp(ctk.CTk):
         button_frame.pack(pady=10)
         refresh_button = ctk.CTkButton(button_frame, text="Refresh Data", command=self.refresh_dashboard)
         refresh_button.pack(side="left", padx=5)
+
+        self.last_refreshed_label = ctk.CTkLabel(button_frame, text="")
+        self.last_refreshed_label.pack(side="left", padx=5)
+
         delete_button = ctk.CTkButton(button_frame, text="Remove Selected Stock", command=self.delete_selected_stock)
         delete_button.pack(side="left", padx=5)
 
@@ -170,6 +219,7 @@ class StockApp(ctk.CTk):
                 frame.destroy()
             self.currency_frames.clear()
             self.summary_labels.clear()
+            self.last_refreshed_label.configure(text="Last Refreshed: Never")
             return
 
         tickers_to_fetch = [s[1] for s in stocks if not s[2]]
@@ -228,6 +278,8 @@ class StockApp(ctk.CTk):
             total_pl_percent = (total_pl / initial_cost * 100) if initial_cost > 0 else 0
             self.summary_labels[currency]["value"].configure(text=f"Total Value: {symbol}{total_value:,.2f}")
             self.summary_labels[currency]["pl"].configure(text=f"Total P/L: {symbol}{total_pl:,.2f} ({total_pl_percent:.2f}%)")
+
+        self.last_refreshed_label.configure(text=f"Last Refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     def delete_selected_stock(self):
         selected_item = self.stock_tree.selection()
@@ -380,6 +432,11 @@ class StockApp(ctk.CTk):
         ctk.CTkLabel(settings_frame, text="Dashboard Refresh Interval (seconds):").grid(row=2, column=0, padx=10, pady=10, sticky="w")
         self.refresh_interval_entry = ctk.CTkEntry(settings_frame, placeholder_text="e.g., 300")
         self.refresh_interval_entry.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        ctk.CTkLabel(settings_frame, text="Minimize to System Tray on Close:").grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        self.minimize_to_tray_switch = ctk.CTkSwitch(settings_frame, text="")
+        self.minimize_to_tray_switch.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        
         settings_frame.grid_columnconfigure(1, weight=1)
         save_settings_button = ctk.CTkButton(tab, text="Save Settings", command=self.save_settings)
         save_settings_button.pack(padx=20, pady=20)
@@ -414,6 +471,7 @@ class StockApp(ctk.CTk):
                 db.save_setting("pushover_api_token", self.pushover_api_token_entry.get())
             elif service == "Pushbullet":
                 db.save_setting("pushbullet_api_token", self.pushbullet_token_entry.get())
+
             messagebox.showinfo("Success", "Settings saved successfully.")
             self.stop_dashboard_refresh_thread()
             self.start_dashboard_refresh_thread()
@@ -431,6 +489,16 @@ class StockApp(ctk.CTk):
         if pushbullet_token: self.pushbullet_token_entry.insert(0, pushbullet_token)
         refresh_interval = db.get_setting("dashboard_refresh_interval")
         if refresh_interval: self.refresh_interval_entry.insert(0, refresh_interval)
+
+        minimize_to_tray = db.get_setting("minimize_to_tray")
+        # Default to "True" if the setting is not found in the database
+        if minimize_to_tray is None: 
+            minimize_to_tray = "True"
+
+        if minimize_to_tray == "True":
+            self.minimize_to_tray_switch.select()
+        else:
+            self.minimize_to_tray_switch.deselect()
 
     def start_dashboard_refresh_thread(self):
         self.stop_event = threading.Event()

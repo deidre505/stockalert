@@ -73,6 +73,7 @@ def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("dashboard_refresh_interval", "300")) # Default to 5 minutes (300 seconds)
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("minimize_to_tray", "True")) # Default to minimize to tray
     conn.commit()
     conn.close()
 
