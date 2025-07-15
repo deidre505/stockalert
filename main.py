@@ -38,6 +38,11 @@ class StockApp(ctk.CTk):
         self.tab_view.add("Alerts")
         self.tab_view.add("Settings")
 
+        self.summary_container = ctk.CTkFrame(self.tab_view.tab("Dashboard"))
+        self.summary_container.pack(pady=10, padx=10, fill="x")
+        self.summary_labels = {}
+        self.currency_frames = {}
+
         self.setup_dashboard_tab()
         self.setup_add_stock_tab()
         self.setup_alerts_tab()
@@ -127,10 +132,7 @@ class StockApp(ctk.CTk):
 
     def setup_dashboard_tab(self):
         tab = self.tab_view.tab("Dashboard")
-        self.summary_container = ctk.CTkFrame(tab)
-        self.summary_container.pack(pady=10, padx=10, fill="x")
-        self.summary_labels = {}
-
+        
         columns = ("Name", "Ticker", "Shares", "Currency", "Purchase Price", "Current Price", "P/L", "P/L %")
         self.stock_tree = ttk.Treeview(tab, columns=columns, show='headings')
         
@@ -164,8 +166,10 @@ class StockApp(ctk.CTk):
 
         stocks = db.get_all_stocks()
         if not stocks:
-            for widget in self.summary_container.winfo_children():
-                widget.destroy()
+            for frame in self.currency_frames.values():
+                frame.destroy()
+            self.currency_frames.clear()
+            self.summary_labels.clear()
             return
 
         tickers_to_fetch = [s[1] for s in stocks if not s[2]]
@@ -182,23 +186,33 @@ class StockApp(ctk.CTk):
         for stock in stocks:
             portfolio_by_currency[stock[5]]["stocks"].append(stock)
 
-        for widget in self.summary_container.winfo_children():
-            widget.destroy()
-        self.summary_labels.clear()
+        # Destroy frames for currencies that are no longer present
+        for currency in list(self.currency_frames.keys()):
+            if currency not in portfolio_by_currency:
+                self.currency_frames[currency].destroy()
+                del self.currency_frames[currency]
+                del self.summary_labels[currency]
 
         for currency, data in portfolio_by_currency.items():
             symbol = get_currency_symbol(currency)
-            currency_frame = ctk.CTkFrame(self.summary_container)
-            currency_frame.pack(pady=5, padx=5, fill="x")
-            ctk.CTkLabel(currency_frame, text=f"--- {currency} Portfolio ---", font=("Arial", 16, "bold")).pack(side="left", padx=10)
-            value_label = ctk.CTkLabel(currency_frame, text="", font=("Arial", 14))
-            value_label.pack(side="left", padx=10)
-            pl_label = ctk.CTkLabel(currency_frame, text="", font=("Arial", 14))
-            pl_label.pack(side="left", padx=10)
-            self.summary_labels[currency] = {"value": value_label, "pl": pl_label}
+            
+            if currency not in self.currency_frames:
+                currency_frame = ctk.CTkFrame(self.summary_container)
+                currency_frame.pack(pady=5, padx=5, fill="x")
+                self.currency_frames[currency] = currency_frame
+                
+                ctk.CTkLabel(currency_frame, text=f"--- {currency} Portfolio ---", font=("Arial", 16, "bold")).pack(side="left", padx=10)
+                
+                value_label = ctk.CTkLabel(currency_frame, text="", font=("Arial", 14))
+                value_label.pack(side="left", padx=10)
+                
+                pl_label = ctk.CTkLabel(currency_frame, text="", font=("Arial", 14))
+                pl_label.pack(side="left", padx=10)
+                
+                self.summary_labels[currency] = {"value": value_label, "pl": pl_label}
+            else:
+                currency_frame = self.currency_frames[currency]
 
-        for currency, data in portfolio_by_currency.items():
-            symbol = get_currency_symbol(currency)
             total_value, initial_cost = 0, 0
             for stock in data["stocks"]:
                 stock_id, ticker, full_name, shares, purchase_price, _ = stock
