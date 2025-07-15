@@ -64,7 +64,7 @@ class StockApp(ctk.CTk):
         self.summary_labels = {} # To hold labels for each currency
 
         # --- Treeview for stock list ---
-        self.stock_tree = ttk.Treeview(tab, columns=("ID", "Ticker", "Shares", "Currency", "Purchase Price", "Current Price", "P/L"), show='headings')
+        self.stock_tree = ttk.Treeview(tab, columns=("ID", "Ticker", "Shares", "Currency", "Purchase Price", "Current Price", "P/L", "P/L %"), show='headings')
         self.stock_tree.heading("ID", text="ID")
         self.stock_tree.heading("Ticker", text="Ticker")
         self.stock_tree.heading("Shares", text="Shares")
@@ -72,6 +72,7 @@ class StockApp(ctk.CTk):
         self.stock_tree.heading("Purchase Price", text="Avg. Purchase Price")
         self.stock_tree.heading("Current Price", text="Current Price")
         self.stock_tree.heading("P/L", text="Profit/Loss")
+        self.stock_tree.heading("P/L %", text="P/L %")
         
         self.stock_tree.column("ID", width=40, anchor='center')
         self.stock_tree.column("Shares", width=80, anchor='e')
@@ -79,6 +80,10 @@ class StockApp(ctk.CTk):
         self.stock_tree.column("Purchase Price", width=150, anchor='e')
         self.stock_tree.column("Current Price", width=150, anchor='e')
         self.stock_tree.column("P/L", width=150, anchor='e')
+        self.stock_tree.column("P/L %", width=100, anchor='e')
+
+        self.stock_tree.tag_configure('positive', foreground='green')
+        self.stock_tree.tag_configure('negative', foreground='red')
         
         self.stock_tree.pack(expand=True, fill="both", padx=10, pady=10)
 
@@ -142,8 +147,16 @@ class StockApp(ctk.CTk):
                 current_price = live_prices.get(ticker, 0)
                 
                 pl = (current_price - purchase_price) * shares if shares and shares > 0 else 0
+                pl_percent = (pl / (purchase_price * shares) * 100) if shares and shares > 0 and purchase_price > 0 else 0
                 pl_text = f"{symbol}{pl:,.2f}"
+                pl_percent_text = f"{pl_percent:,.2f}%"
                 
+                tag = ''
+                if pl > 0:
+                    tag = 'positive'
+                elif pl < 0:
+                    tag = 'negative'
+
                 self.stock_tree.insert("", "end", values=(
                     stock_id, 
                     ticker, 
@@ -151,8 +164,9 @@ class StockApp(ctk.CTk):
                     currency,
                     f"{symbol}{purchase_price:,.2f}", 
                     f"{symbol}{current_price:,.2f}", 
-                    pl_text
-                ))
+                    pl_text,
+                    pl_percent_text
+                ), tags=(tag,))
                 
                 if shares and shares > 0:
                     total_value += current_price * shares
