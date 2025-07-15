@@ -36,6 +36,13 @@ def initialize_database():
         print("Migrating database: Adding 'currency' column to stocks table.")
         cursor.execute("ALTER TABLE stocks ADD COLUMN currency TEXT")
 
+    # Add full_name column to stocks table if it doesn't exist
+    try:
+        cursor.execute("SELECT full_name FROM stocks LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating database: Adding 'full_name' column to stocks table.")
+        cursor.execute("ALTER TABLE stocks ADD COLUMN full_name TEXT")
+
 
     # Create alerts table
     cursor.execute("""
@@ -80,11 +87,19 @@ def add_stock(ticker, shares, purchase_price, currency):
     conn.commit()
     conn.close()
 
+def update_stock_name(ticker, full_name):
+    """Updates the full name of a stock."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE stocks SET full_name = ? WHERE ticker = ?", (full_name, ticker))
+    conn.commit()
+    conn.close()
+
 def get_all_stocks():
     """Retrieves all stocks from the database."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, ticker, shares, purchase_price, currency FROM stocks ORDER BY ticker")
+    cursor.execute("SELECT id, ticker, full_name, shares, purchase_price, currency FROM stocks ORDER BY ticker")
     stocks = cursor.fetchall()
     conn.close()
     return stocks
@@ -142,7 +157,7 @@ def get_stock_by_id(stock_id):
     conn = get_connection()
     cursor = conn.cursor()
     # Select all columns explicitly to ensure order
-    cursor.execute("SELECT id, ticker, shares, purchase_price, currency FROM stocks WHERE id = ?", (stock_id,))
+    cursor.execute("SELECT id, ticker, full_name, shares, purchase_price, currency FROM stocks WHERE id = ?", (stock_id,))
     stock = cursor.fetchone()
     conn.close()
     return stock

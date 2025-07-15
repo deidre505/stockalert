@@ -64,8 +64,8 @@ class StockApp(ctk.CTk):
         self.summary_labels = {} # To hold labels for each currency
 
         # --- Treeview for stock list ---
-        self.stock_tree = ttk.Treeview(tab, columns=("ID", "Ticker", "Shares", "Currency", "Purchase Price", "Current Price", "P/L", "P/L %"), show='headings')
-        self.stock_tree.heading("ID", text="ID")
+        self.stock_tree = ttk.Treeview(tab, columns=("Name", "Ticker", "Shares", "Currency", "Purchase Price", "Current Price", "P/L", "P/L %"), show='headings')
+        self.stock_tree.heading("Name", text="Name")
         self.stock_tree.heading("Ticker", text="Ticker")
         self.stock_tree.heading("Shares", text="Shares")
         self.stock_tree.heading("Currency", text="Currency")
@@ -74,7 +74,7 @@ class StockApp(ctk.CTk):
         self.stock_tree.heading("P/L", text="Profit/Loss")
         self.stock_tree.heading("P/L %", text="P/L %")
         
-        self.stock_tree.column("ID", width=40, anchor='center')
+        self.stock_tree.column("Name", width=200, anchor='w')
         self.stock_tree.column("Shares", width=80, anchor='e')
         self.stock_tree.column("Currency", width=80, anchor='center')
         self.stock_tree.column("Purchase Price", width=150, anchor='e')
@@ -109,12 +109,19 @@ class StockApp(ctk.CTk):
                 widget.destroy()
             return
 
+        tickers_to_fetch = [s[1] for s in stocks if not s[2]] # Fetch name if not cached
+        if tickers_to_fetch:
+            live_data = yf_client.get_current_prices(tickers_to_fetch)
+            for ticker, data in live_data.items():
+                db.update_stock_name(ticker, data['full_name'])
+            stocks = db.get_all_stocks() # Re-fetch stocks to get the new names
+
         tickers = [s[1] for s in stocks]
         live_prices = yf_client.get_current_prices(tickers)
 
         portfolio_by_currency = defaultdict(lambda: {"stocks": [], "total_value": 0, "initial_cost": 0})
         for stock in stocks:
-            stock_id, ticker, shares, purchase_price, currency = stock
+            stock_id, ticker, full_name, shares, purchase_price, currency = stock
             portfolio_by_currency[currency]["stocks"].append(stock)
 
         for widget in self.summary_container.winfo_children():
@@ -143,8 +150,8 @@ class StockApp(ctk.CTk):
             initial_cost = 0
 
             for stock in data["stocks"]:
-                stock_id, ticker, shares, purchase_price, _ = stock
-                current_price = live_prices.get(ticker, 0)
+                stock_id, ticker, full_name, shares, purchase_price, _ = stock
+                current_price = live_prices.get(ticker, {}).get('price', 0)
                 
                 pl = (current_price - purchase_price) * shares if shares and shares > 0 else 0
                 pl_percent = (pl / (purchase_price * shares) * 100) if shares and shares > 0 and purchase_price > 0 else 0
@@ -158,7 +165,7 @@ class StockApp(ctk.CTk):
                     tag = 'negative'
 
                 self.stock_tree.insert("", "end", values=(
-                    stock_id, 
+                    full_name,
                     ticker, 
                     shares, 
                     currency,
@@ -185,7 +192,12 @@ class StockApp(ctk.CTk):
             messagebox.showerror("Error", "Please select a stock to delete.")
             return
 
-        stock_id = self.stock_tree.item(selected_item, "values")[0]
+        # Since we are not displaying the ID, we need to get it from the database
+        # This is a bit of a workaround, a better solution would be to store the ID
+        # in the treeview but not display it.
+        ticker = self.stock_tree.item(selected_item, "values")[1]
+        stock = self.get_stock_by_ticker(ticker)
+        stock_id = stock[0]
 
         if messagebox.askyesno("Confirm Deletion", "Are you sure you want to delete this stock and all its associated alerts?"):
             try:

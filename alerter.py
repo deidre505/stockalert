@@ -42,8 +42,9 @@ def check_alerts():
             try:
                 stock = stocks_by_id.get(alert[1])
                 if stock:
-                    current_price = live_prices.get(stock[1])
-                    if current_price:
+                    current_price_data = live_prices.get(stock[1])
+                    if current_price_data:
+                        current_price = current_price_data['price']
                         process_alert(alert, stock, current_price)
             except Exception as e:
                 print(f"Error processing alert {alert[0]}: {e}")
@@ -110,14 +111,14 @@ def send_notification(stock, alert_type, current_price, benchmark_price):
     if not notification_service or notification_service == "None":
         return
 
-    stock_id, ticker, _, _, currency = stock
+    stock_id, ticker, full_name, _, _, currency = stock
     symbol = get_currency_symbol(currency)
 
     title = f"Stock Alert: {ticker}"
     if alert_type == "Price Drops From Recent High":
-        message = f"{ticker} has dropped to {symbol}{current_price:,.2f} from a recent high of {symbol}{benchmark_price:,.2f}."
+        message = f"{full_name} ({ticker}) has dropped to {symbol}{current_price:,.2f} from a recent high of {symbol}{benchmark_price:,.2f}."
     else: # Price Rises From Recent Low
-        message = f"{ticker} has risen to {symbol}{current_price:,.2f} from a recent low of {symbol}{benchmark_price:,.2f}."
+        message = f"{full_name} ({ticker}) has risen to {symbol}{current_price:,.2f} from a recent low of {symbol}{benchmark_price:,.2f}."
 
     if notification_service == "Pushover":
         user_key = db.get_setting("pushover_user_key")

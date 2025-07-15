@@ -31,9 +31,10 @@ def get_current_prices(tickers):
             data = response.json()
             # The most reliable field for the current price
             current_price = data['chart']['result'][0]['meta']['regularMarketPrice']
+            full_name = data['chart']['result'][0]['meta'].get('longName', ticker_symbol) # Fallback to ticker
             
             if current_price:
-                prices[ticker_symbol] = current_price
+                prices[ticker_symbol] = {'price': current_price, 'full_name': full_name}
             else:
                 print(f"Could not find price for {ticker_symbol} in API response.")
 
