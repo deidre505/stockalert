@@ -3,6 +3,10 @@ import threading
 import database as db
 import yfinance_client as yf_client
 import notifier
+import queue
+
+# Queue for sending alerts to the UI thread
+ui_alert_queue = queue.Queue()
 
 # --- Currency Formatting ---
 
@@ -19,8 +23,18 @@ def get_currency_symbol(currency_code):
 
 # --- Alerter Logic ---
 
+debug_fake_price = None
+alerter_thread_instance = None
+
+def inject_fake_price(ticker, price):
+    """Injects a fake price for a specific ticker for one check cycle."""
+    global debug_fake_price
+    print(f"Injecting fake price for {ticker}: {price}")
+    debug_fake_price = {"ticker": ticker, "price": price}
+
 def check_alerts():
     """The main loop for the alerter thread."""
+    global debug_fake_price
     while True:
         print("Checking for alerts...")
         alerts = db.get_all_alerts()
@@ -37,6 +51,15 @@ def check_alerts():
         # Fetch all required price data in a batch
         tickers = [s[1] for s in stocks_by_id.values() if s]
         live_prices = yf_client.get_current_prices(tickers)
+
+        # --- Debug Price Injection ---
+        if debug_fake_price:
+            fake_ticker = debug_fake_price.get("ticker")
+            fake_price = debug_fake_price.get("price")
+            if fake_ticker in live_prices:
+                live_prices[fake_ticker]['price'] = fake_price
+                print(f"Overwrote {fake_ticker} price with fake price {fake_price}")
+            debug_fake_price = None # Reset after use
 
         for alert in alerts:
             try:
@@ -106,11 +129,6 @@ def process_alert(alert, stock, current_price):
 
 def send_notification(stock, alert_type, current_price, benchmark_price):
     """Sends a notification for a triggered alert."""
-    notification_service = db.get_setting("notification_service")
-
-    if not notification_service or notification_service == "None":
-        return
-
     stock_id, ticker, full_name, _, _, currency = stock
     symbol = get_currency_symbol(currency)
 
@@ -119,6 +137,15 @@ def send_notification(stock, alert_type, current_price, benchmark_price):
         message = f"{full_name} ({ticker}) has dropped to {symbol}{current_price:,.2f} from a recent high of {symbol}{benchmark_price:,.2f}."
     else: # Price Rises From Recent Low
         message = f"{full_name} ({ticker}) has risen to {symbol}{current_price:,.2f} from a recent low of {symbol}{benchmark_price:,.2f}."
+
+    # --- UI Alert ---
+    ui_alert_queue.put({"title": title, "message": message})
+
+    # --- Mobile Notification ---
+    notification_service = db.get_setting("notification_service")
+
+    if not notification_service or notification_service == "None":
+        return
 
     if notification_service == "Pushover":
         user_key = db.get_setting("pushover_user_key")

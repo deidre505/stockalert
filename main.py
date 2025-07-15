@@ -7,6 +7,7 @@ import threading
 import time
 from tkinter import messagebox, ttk
 from collections import defaultdict
+import queue
 
 def get_currency_symbol(currency_code):
     """Returns the currency symbol for a given currency code."""
@@ -54,6 +55,66 @@ class StockApp(ctk.CTk):
 
         # Start the dashboard refresh thread
         self.start_dashboard_refresh_thread()
+
+        # Bind the debug key combination
+        self.bind("<Control-Shift-D>", self.open_debug_window)
+
+        # Start the UI alert checker
+        self.check_ui_alert_queue()
+
+    def check_ui_alert_queue(self):
+        try:
+            alert_data = alerter.ui_alert_queue.get_nowait()
+            messagebox.showinfo(alert_data["title"], alert_data["message"])
+        except queue.Empty:
+            pass # No alerts
+        finally:
+            self.after(1000, self.check_ui_alert_queue) # Check again in 1 second
+
+    def open_debug_window(self, event=None):
+        debug_window = ctk.CTkToplevel(self)
+        debug_window.title("Debug Panel")
+        debug_window.geometry("450x220")
+
+        ctk.CTkLabel(debug_window, text="Inject Fake Price by Percentage", font=("Arial", 16)).pack(pady=10)
+
+        stocks = db.get_all_stocks()
+        stock_tickers = [s[1] for s in stocks]
+
+        ctk.CTkLabel(debug_window, text="Stock Ticker:").pack()
+        debug_ticker_optionmenu = ctk.CTkOptionMenu(debug_window, values=stock_tickers if stock_tickers else ["No stocks"])
+        debug_ticker_optionmenu.pack(pady=5)
+
+        ctk.CTkLabel(debug_window, text="Percentage Change (%):").pack()
+        debug_percent_entry = ctk.CTkEntry(debug_window, placeholder_text="e.g., -10 for a 10% drop")
+        debug_percent_entry.pack(pady=5)
+
+        def inject():
+            ticker = debug_ticker_optionmenu.get()
+            percent_str = debug_percent_entry.get()
+            if not ticker or not percent_str or ticker == "No stocks":
+                messagebox.showerror("Error", "Please select a stock and enter a percentage.", parent=debug_window)
+                return
+            try:
+                percent_change = float(percent_str)
+                
+                # Get the current price to calculate the fake price
+                live_price_data = yf_client.get_current_prices([ticker])
+                if not live_price_data or ticker not in live_price_data:
+                    messagebox.showerror("Error", f"Could not fetch current price for {ticker}.", parent=debug_window)
+                    return
+                
+                current_price = live_price_data[ticker]['price']
+                fake_price = current_price * (1 + percent_change / 100)
+
+                alerter.inject_fake_price(ticker, fake_price)
+                messagebox.showinfo("Success", f"Fake price of {fake_price:,.2f} for {ticker} injected.", parent=debug_window)
+                debug_window.destroy()
+            except ValueError:
+                messagebox.showerror("Error", "Percentage must be a number.", parent=debug_window)
+
+        inject_button = ctk.CTkButton(debug_window, text="Enter", command=inject)
+        inject_button.pack(pady=10)
 
     def setup_dashboard_tab(self):
         tab = self.tab_view.tab("Dashboard")
