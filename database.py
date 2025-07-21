@@ -2,8 +2,15 @@ import sqlite3
 import os
 
 def get_db_path():
-    """Returns the absolute path to the database file."""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'portfolio.db')
+    """Returns the absolute path to the database file in the user's AppData folder."""
+    app_data_path = os.getenv('APPDATA')
+    if not app_data_path:
+        # Fallback for environments where APPDATA is not set
+        app_data_path = os.path.expanduser('~')
+    
+    db_dir = os.path.join(app_data_path, 'StockAlert')
+    os.makedirs(db_dir, exist_ok=True)
+    return os.path.join(db_dir, 'portfolio.db')
 
 def get_connection():
     """Establishes and returns a database connection."""

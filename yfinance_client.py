@@ -1,4 +1,16 @@
 
+import yfinance as yf
+import os
+
+# Set the cache directory to the AppData folder
+app_data_path = os.getenv('APPDATA')
+if not app_data_path:
+    app_data_path = os.path.expanduser('~')
+cache_dir = os.path.join(app_data_path, 'StockAlert', 'yfinance_cache')
+os.makedirs(cache_dir, exist_ok=True)
+yf.set_tz_cache_location(cache_dir)
+
+
 import requests
 import time
 

@@ -1,1 +1,1 @@
-Minor bug fixes and UI improvements.
+Make database and yfinance cache persistent in AppData

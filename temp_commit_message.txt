@@ -1,1 +1,0 @@
-Fix TclError on quit from tray, refine minimize toggle logic, and improve shutdown sequence.
