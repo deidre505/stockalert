@@ -87,13 +87,40 @@ def initialize_database():
 # --- Stock Functions ---
 
 def add_stock(ticker, shares, purchase_price, currency):
-    """Adds a new stock to the database."""
+    """Adds a new stock or merges it with an existing one."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO stocks (ticker, shares, purchase_price, currency) VALUES (?, ?, ?, ?)",
-                   (ticker.upper(), shares, purchase_price, currency))
+    
+    ticker = ticker.upper()
+    cursor.execute("SELECT shares, purchase_price, currency FROM stocks WHERE ticker = ?", (ticker,))
+    existing_stock = cursor.fetchone()
+
+    if existing_stock:
+        existing_shares, existing_price, existing_currency = existing_stock
+
+        if existing_currency != currency:
+            conn.close()
+            return "currency_mismatch"
+
+        if shares > 0 and purchase_price > 0:
+            total_shares = existing_shares + shares
+            new_avg_price = ((existing_shares * existing_price) + (shares * purchase_price)) / total_shares
+            cursor.execute("UPDATE stocks SET shares = ?, purchase_price = ? WHERE ticker = ?", 
+                           (total_shares, new_avg_price, ticker))
+            status = "merged"
+        else:
+            # If no new shares/price, just update with existing values (no change)
+            cursor.execute("UPDATE stocks SET shares = ?, purchase_price = ? WHERE ticker = ?",
+                           (existing_shares, existing_price, ticker))
+            status = "no_change"
+    else:
+        cursor.execute("INSERT INTO stocks (ticker, shares, purchase_price, currency) VALUES (?, ?, ?, ?)",
+                       (ticker, shares, purchase_price, currency))
+        status = "added"
+
     conn.commit()
     conn.close()
+    return status
 
 def update_stock_name(ticker, full_name):
     """Updates the full name of a stock."""

@@ -330,14 +330,21 @@ class StockApp(ctk.CTk):
         except ValueError:
             messagebox.showerror("Error", "Shares and Purchase Price must be valid numbers.")
             return
-        try:
-            db.add_stock(ticker, shares, purchase_price, currency)
-            messagebox.showinfo("Success", f"Stock {ticker} ({currency}) saved successfully.")
-            for entry in [self.ticker_entry, self.shares_entry, self.price_entry]: entry.delete(0, 'end')
-            self.refresh_dashboard()
-            self.refresh_alerts_tab()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save stock: {e}")
+
+        status = db.add_stock(ticker, shares, purchase_price, currency)
+
+        if status == "added":
+            messagebox.showinfo("Success", f"Stock {ticker} ({currency}) added successfully.")
+        elif status == "merged":
+            messagebox.showinfo("Success", f"Stock {ticker} ({currency}) updated successfully. The new shares have been merged, and the average purchase price has been recalculated.")
+        elif status == "currency_mismatch":
+            messagebox.showerror("Error", f"Could not add stock {ticker}. A stock with this ticker but a different currency already exists.")
+        elif status == "no_change":
+            messagebox.showinfo("Info", f"No changes were made to stock {ticker}.")
+
+        for entry in [self.ticker_entry, self.shares_entry, self.price_entry]: entry.delete(0, 'end')
+        self.refresh_dashboard()
+        self.refresh_alerts_tab()
 
     def setup_alerts_tab(self):
         tab = self.tab_view.tab("Alerts")

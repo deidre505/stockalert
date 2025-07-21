@@ -1,1 +1,1 @@
-Make database and yfinance cache persistent in AppData
+Feat: Implement stock merging and currency validation on add
