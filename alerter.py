@@ -90,9 +90,20 @@ def check_alerts():
 
 def process_alert(alert, stock, current_price):
     """Processes a single alert using pre-fetched data."""
-    alert_id, stock_id, alert_type, threshold_percent, is_active, last_benchmark_price, current_state = alert
+    alert_id, stock_id, alert_type, threshold_percent, target_price, is_active, last_benchmark_price, current_state = alert
 
     if not is_active:
+        return
+
+    if alert_type == "Price Rises Above":
+        if target_price is not None and current_price >= target_price:
+            send_notification(stock, alert_type, current_price, target_price)
+            db.update_alert_status(alert_id, False)
+        return
+    elif alert_type == "Price Falls Below":
+        if target_price is not None and current_price <= target_price:
+            send_notification(stock, alert_type, current_price, target_price)
+            db.update_alert_status(alert_id, False)
         return
 
     if not current_state:
@@ -146,8 +157,12 @@ def send_notification(stock, alert_type, current_price, benchmark_price):
     title = f"Stock Alert: {ticker}"
     if alert_type == "Price Drops From Recent High":
         message = f"{full_name} ({ticker}) has dropped to {symbol}{current_price:,.2f} from a recent high of {symbol}{benchmark_price:,.2f}."
-    else: # Price Rises From Recent Low
+    elif alert_type == "Price Rises From Recent Low":
         message = f"{full_name} ({ticker}) has risen to {symbol}{current_price:,.2f} from a recent low of {symbol}{benchmark_price:,.2f}."
+    elif alert_type == "Price Rises Above":
+        message = f"{full_name} ({ticker}) has risen above your target of {symbol}{benchmark_price:,.2f} and is currently at {symbol}{current_price:,.2f}."
+    elif alert_type == "Price Falls Below":
+        message = f"{full_name} ({ticker}) has fallen below your target of {symbol}{benchmark_price:,.2f} and is currently at {symbol}{current_price:,.2f}."
 
     print(f"[NOTIFICATION] Triggered for {ticker}. Sending alert.")
     ui_alert_queue.put({"title": title, "message": message})

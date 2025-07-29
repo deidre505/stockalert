@@ -346,6 +346,14 @@ class StockApp(ctk.CTk):
         self.refresh_dashboard()
         self.refresh_alerts_tab()
 
+    def get_stock_by_ticker(self, ticker):
+        """Helper function to find a stock by its ticker from the database."""
+        stocks = db.get_all_stocks()
+        for stock in stocks:
+            if stock[1] == ticker: # stock[1] is the ticker
+                return stock
+        return None
+
     def setup_alerts_tab(self):
         tab = self.tab_view.tab("Alerts")
         create_alert_frame = ctk.CTkFrame(tab)
@@ -355,11 +363,16 @@ class StockApp(ctk.CTk):
         self.alert_stock_optionmenu = ctk.CTkOptionMenu(create_alert_frame, values=[])
         self.alert_stock_optionmenu.pack(pady=5)
         ctk.CTkLabel(create_alert_frame, text="Alert Type:").pack(pady=(5,0))
-        self.alert_type_optionmenu = ctk.CTkOptionMenu(create_alert_frame, values=["Price Drops From Recent High", "Price Rises From Recent Low"])
+        self.alert_type_optionmenu = ctk.CTkOptionMenu(create_alert_frame, 
+                                                     values=["Price Rises Above", "Price Falls Below", "Price Drops From Recent High", "Price Rises From Recent Low"],
+                                                     command=self.on_alert_type_change)
         self.alert_type_optionmenu.pack(pady=5)
+
         self.percent_change_label = ctk.CTkLabel(create_alert_frame, text="Percent Change (%):")
-        self.alert_threshold_entry = ctk.CTkEntry(create_alert_frame, placeholder_text="e.g., 5")
-        self.alert_threshold_entry.pack(pady=5)
+        self.percent_change_entry = ctk.CTkEntry(create_alert_frame, placeholder_text="e.g., 5")
+
+        self.target_price_label = ctk.CTkLabel(create_alert_frame, text="Target Price:")
+        self.target_price_entry = ctk.CTkEntry(create_alert_frame, placeholder_text="e.g., 150.75")
         save_alert_button = ctk.CTkButton(create_alert_frame, text="Save Alert", command=self.save_alert)
         save_alert_button.pack(pady=10)
         existing_alerts_frame = ctk.CTkFrame(tab)
@@ -374,6 +387,8 @@ class StockApp(ctk.CTk):
         self.alerts_tree.pack(expand=True, fill="both", padx=10, pady=10)
         delete_alert_button = ctk.CTkButton(existing_alerts_frame, text="Delete Selected Alert", command=self.delete_selected_alert)
         delete_alert_button.pack(pady=10)
+        
+        self.on_alert_type_change(self.alert_type_optionmenu.get())
         self.refresh_alerts_tab()
 
     def delete_selected_alert(self):
@@ -389,29 +404,64 @@ class StockApp(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete alert: {e}")
 
-    def get_stock_by_ticker(self, ticker):
-        return next((s for s in db.get_all_stocks() if s[1] == ticker), None)
+    def on_alert_type_change(self, choice):
+        if choice in ["Price Rises Above", "Price Falls Below"]:
+            self.percent_change_label.pack_forget()
+            self.percent_change_entry.pack_forget()
+            self.target_price_label.pack(pady=(5,0))
+            self.target_price_entry.pack(pady=5)
+        else:
+            self.target_price_label.pack_forget()
+            self.target_price_entry.pack_forget()
+            self.percent_change_label.pack(pady=(5,0))
+            self.percent_change_entry.pack(pady=5)
 
     def save_alert(self):
-        stock_ticker, alert_type, threshold_str = self.alert_stock_optionmenu.get(), self.alert_type_optionmenu.get(), self.alert_threshold_entry.get()
-        if not all([stock_ticker, alert_type, threshold_str]):
-            messagebox.showerror("Error", "Please fill in all fields.")
+        stock_ticker = self.alert_stock_optionmenu.get()
+        alert_type = self.alert_type_optionmenu.get()
+
+        if not stock_ticker:
+            messagebox.showerror("Error", "Please select a stock.")
             return
-        try:
-            threshold = float(threshold_str)
-        except ValueError:
-            messagebox.showerror("Error", "Threshold must be a valid number.")
-            return
+
         stock = self.get_stock_by_ticker(stock_ticker)
         if not stock:
             messagebox.showerror("Error", f"Could not find stock with ticker {stock_ticker}.")
             return
-        try:
-            db.add_alert(stock[0], alert_type, threshold)
-            messagebox.showinfo("Success", f"Alert for {stock_ticker} saved successfully.")
-            self.refresh_alerts_tab()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save alert: {e}")
+
+        if alert_type in ["Price Rises Above", "Price Falls Below"]:
+            target_price_str = self.target_price_entry.get()
+            if not target_price_str:
+                messagebox.showerror("Error", "Please enter a target price.")
+                return
+            try:
+                target_price = float(target_price_str)
+                db.add_alert(stock[0], alert_type, target_price=target_price)
+            except ValueError:
+                messagebox.showerror("Error", "Target price must be a valid number.")
+                return
+        else:
+            threshold_str = self.percent_change_entry.get()
+            if not threshold_str:
+                messagebox.showerror("Error", "Please enter a percent change.")
+                return
+            try:
+                threshold = float(threshold_str)
+                alert_id = db.add_alert(stock[0], alert_type, threshold_percent=threshold)
+                
+                # Immediately set the initial state for percentage-based alerts
+                live_price_data = yf_client.get_current_prices([stock_ticker])
+                if live_price_data and stock_ticker in live_price_data:
+                    current_price = live_price_data[stock_ticker]['price']
+                    initial_state = "watching_for_peak" if alert_type == "Price Drops From Recent High" else "watching_for_trough"
+                    db.update_alert_state(alert_id, initial_state, current_price)
+
+            except ValueError:
+                messagebox.showerror("Error", "Percent change must be a valid number.")
+                return
+
+        messagebox.showinfo("Success", f"Alert for {stock_ticker} saved successfully.")
+        self.refresh_alerts_tab()
 
     def refresh_alerts_tab(self):
         for item in self.alerts_tree.get_children(): self.alerts_tree.delete(item)

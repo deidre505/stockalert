@@ -159,17 +159,22 @@ def delete_stock(stock_id):
 
 # --- Alert Functions ---
 
-def add_alert(stock_id, alert_type, threshold_percent):
-    """Adds or replaces an alert for a stock."""
+def add_alert(stock_id, alert_type, threshold_percent=None, target_price=None):
+    """Adds or replaces an alert for a stock and returns its ID."""
     conn = get_connection()
     cursor = conn.cursor()
-    # Use INSERT OR REPLACE to ensure only one alert of a given type per stock
     cursor.execute("""
-        INSERT OR REPLACE INTO alerts (id, stock_id, alert_type, threshold_percent, is_active, last_benchmark_price, current_state) 
-        VALUES ((SELECT id FROM alerts WHERE stock_id = ? AND alert_type = ?), ?, ?, ?, 1, NULL, NULL)
-    """, (stock_id, alert_type, stock_id, alert_type, threshold_percent))
+        INSERT OR REPLACE INTO alerts (id, stock_id, alert_type, threshold_percent, target_price, is_active, last_benchmark_price, current_state) 
+        VALUES ((SELECT id FROM alerts WHERE stock_id = ? AND alert_type = ?), ?, ?, ?, ?, 1, NULL, NULL)
+    """, (stock_id, alert_type, stock_id, alert_type, threshold_percent, target_price))
+    
+    # Get the ID of the row that was just inserted/replaced
+    cursor.execute("SELECT id FROM alerts WHERE stock_id = ? AND alert_type = ?", (stock_id, alert_type))
+    alert_id = cursor.fetchone()[0]
+    
     conn.commit()
     conn.close()
+    return alert_id
 
 def get_stock_alerts(stock_id):
     """Retrieves all alerts for a specific stock."""
