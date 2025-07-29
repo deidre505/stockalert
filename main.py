@@ -357,7 +357,7 @@ class StockApp(ctk.CTk):
         ctk.CTkLabel(create_alert_frame, text="Alert Type:").pack(pady=(5,0))
         self.alert_type_optionmenu = ctk.CTkOptionMenu(create_alert_frame, values=["Price Drops From Recent High", "Price Rises From Recent Low"])
         self.alert_type_optionmenu.pack(pady=5)
-        ctk.CTkLabel(create_alert_frame, text="Threshold (%):").pack(pady=(5,0))
+        self.percent_change_label = ctk.CTkLabel(create_alert_frame, text="Percent Change (%):")
         self.alert_threshold_entry = ctk.CTkEntry(create_alert_frame, placeholder_text="e.g., 5")
         self.alert_threshold_entry.pack(pady=5)
         save_alert_button = ctk.CTkButton(create_alert_frame, text="Save Alert", command=self.save_alert)
@@ -365,9 +365,12 @@ class StockApp(ctk.CTk):
         existing_alerts_frame = ctk.CTkFrame(tab)
         existing_alerts_frame.pack(pady=10, padx=10, fill="both", expand=True)
         ctk.CTkLabel(existing_alerts_frame, text="Your Alerts", font=("Arial", 16)).pack(pady=5)
-        self.alerts_tree = ttk.Treeview(existing_alerts_frame, columns=("ID", "Stock", "Alert Type", "Threshold", "Status"), show='headings')
-        for col in ("ID", "Stock", "Alert Type", "Threshold", "Status"): self.alerts_tree.heading(col, text=col)
-        self.alerts_tree.column("ID", width=40)
+        self.alerts_tree = ttk.Treeview(existing_alerts_frame, columns=("Stock", "Alert Type", "Baseline Price", "Target Price", "Percent Change"), show='headings')
+        self.alerts_tree.heading("Stock", text="Stock")
+        self.alerts_tree.heading("Alert Type", text="Alert Type")
+        self.alerts_tree.heading("Baseline Price", text="Baseline Price")
+        self.alerts_tree.heading("Target Price", text="Target Price")
+        self.alerts_tree.heading("Percent Change", text="Percent Change")
         self.alerts_tree.pack(expand=True, fill="both", padx=10, pady=10)
         delete_alert_button = ctk.CTkButton(existing_alerts_frame, text="Delete Selected Alert", command=self.delete_selected_alert)
         delete_alert_button.pack(pady=10)
@@ -419,9 +422,29 @@ class StockApp(ctk.CTk):
             self.alert_stock_optionmenu.set(stock_tickers[0])
         else:
             self.alert_stock_optionmenu.set("")
+
         for stock in stocks:
-            for alert in db.get_stock_alerts(stock[0]):
-                self.alerts_tree.insert("", "end", values=(alert[0], stock[1], alert[1], f"{alert[2]}%", "Active" if alert[3] else "Inactive"))
+            alerts = db.get_stock_alerts(stock[0])
+            for alert in alerts:
+                alert_id, alert_type, threshold_percent, target_price, is_active, last_benchmark_price, current_state = alert
+                
+                baseline_price_display = "N/A"
+                target_price_display = "N/A"
+                percent_change_display = "N/A"
+
+                if alert_type in ["Price Rises Above", "Price Falls Below"]:
+                    target_price_display = f"{get_currency_symbol(stock[5])}{target_price:,.2f}"
+                else:
+                    if last_benchmark_price is not None:
+                        baseline_price_display = f"{get_currency_symbol(stock[5])}{last_benchmark_price:,.2f}"
+                        if alert_type == "Price Drops From Recent High":
+                            trigger_price = last_benchmark_price * (1 - threshold_percent / 100)
+                        else:
+                            trigger_price = last_benchmark_price * (1 + threshold_percent / 100)
+                        target_price_display = f"{get_currency_symbol(stock[5])}{trigger_price:,.2f}"
+                    percent_change_display = f"{threshold_percent}%"
+
+                self.alerts_tree.insert("", "end", iid=alert_id, values=(stock[2], alert_type, baseline_price_display, target_price_display, percent_change_display))
 
     def setup_settings_tab(self):
         tab = self.tab_view.tab("Settings")

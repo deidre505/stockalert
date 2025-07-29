@@ -58,12 +58,21 @@ def initialize_database():
             stock_id INTEGER,
             alert_type TEXT,
             threshold_percent REAL,
+            target_price REAL, -- For specific price target alerts
             is_active INTEGER,
             last_benchmark_price REAL,
             current_state TEXT,
             FOREIGN KEY (stock_id) REFERENCES stocks (id)
         )
     """)
+
+    # --- Schema Migration ---
+    # Add target_price column to alerts table if it doesn't exist
+    try:
+        cursor.execute("SELECT target_price FROM alerts LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating database: Adding 'target_price' column to alerts table.")
+        cursor.execute("ALTER TABLE alerts ADD COLUMN target_price REAL")
 
     # Create settings table (key-value store)
     cursor.execute("""
@@ -166,7 +175,7 @@ def get_stock_alerts(stock_id):
     """Retrieves all alerts for a specific stock."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, alert_type, threshold_percent, is_active FROM alerts WHERE stock_id = ?", (stock_id,))
+    cursor.execute("SELECT id, alert_type, threshold_percent, target_price, is_active, last_benchmark_price, current_state FROM alerts WHERE stock_id = ?", (stock_id,))
     alerts = cursor.fetchall()
     conn.close()
     return alerts
