@@ -396,7 +396,7 @@ class StockApp(ctk.CTk):
         if not selected_item:
             messagebox.showerror("Error", "Please select an alert to delete.")
             return
-        alert_id = self.alerts_tree.item(selected_item, "values")[0]
+        alert_id = selected_item[0]
         try:
             db.delete_alert(alert_id)
             messagebox.showinfo("Success", "Alert deleted successfully.")

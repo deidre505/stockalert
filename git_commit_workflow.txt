@@ -1,0 +1,38 @@
+# Git Commit and Push Workflow for this Project
+
+This document outlines the reliable method for committing changes to Git, avoiding shell quoting issues.
+
+## Step 1: Stage All Changes
+
+Use `git add .` to stage all new and modified files.
+
+Command:
+`git add .`
+
+## Step 2: Create a Temporary Commit Message File
+
+Instead of using the `-m` flag, we will write the commit message to a temporary file to prevent errors.
+
+1. Create a file named `commit_message.txt`.
+2. Write your full commit message inside this file.
+
+## Step 3: Commit Using the File
+
+Use the `git commit -F` command to use the message from the file.
+
+Command:
+`git commit -F commit_message.txt`
+
+## Step 4: Clean Up the Temporary File
+
+After the commit is successful, delete the temporary file.
+
+Command (Windows):
+`del commit_message.txt`
+
+## Step 5: Push to the Remote Repository
+
+Push your changes to the `origin` remote.
+
+Command:
+`git push origin master`

@@ -63,6 +63,7 @@ def check_alerts():
 
             debug_fake_price = None # Reset after use
             # Continue to the regular check after handling the fake price
+            continue
 
         print("Checking for alerts...")
         alerts = db.get_all_alerts()
