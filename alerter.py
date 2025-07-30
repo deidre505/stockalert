@@ -124,30 +124,36 @@ def process_alert(alert, stock, current_price):
         if current_state == "watching_for_peak":
             if current_price > last_benchmark_price:
                 db.update_alert_state(alert_id, "watching_for_peak", current_price)
-            elif current_price < last_benchmark_price:
+            else: # Price has started to drop
                 db.update_alert_state(alert_id, "watching_for_drop", last_benchmark_price)
-        elif current_state == "watching_for_drop":
+                # Fall through to check if this drop is significant enough to trigger
+                current_state = "watching_for_drop"
+
+        if current_state == "watching_for_drop":
             trigger_price = last_benchmark_price * (1 - threshold_percent / 100)
             print(f"[EVAL] {stock[1]}: Current {current_price} <= Trigger {trigger_price:.2f}?")
             if current_price <= trigger_price:
                 send_notification(stock, alert_type, current_price, last_benchmark_price)
                 db.update_alert_state(alert_id, "watching_for_peak", current_price)
-            elif current_price > last_benchmark_price:
+            elif current_price > last_benchmark_price: # A new peak is forming
                 db.update_alert_state(alert_id, "watching_for_peak", current_price)
 
     elif alert_type == "Price Rises From Recent Low":
         if current_state == "watching_for_trough":
             if current_price < last_benchmark_price:
                 db.update_alert_state(alert_id, "watching_for_trough", current_price)
-            elif current_price > last_benchmark_price:
+            else: # Price has started to rise
                 db.update_alert_state(alert_id, "watching_for_rise", last_benchmark_price)
-        elif current_state == "watching_for_rise":
+                # Fall through to check if this rise is significant enough to trigger
+                current_state = "watching_for_rise"
+
+        if current_state == "watching_for_rise":
             trigger_price = last_benchmark_price * (1 + threshold_percent / 100)
             print(f"[EVAL] {stock[1]}: Current {current_price} >= Trigger {trigger_price:.2f}?")
             if current_price >= trigger_price:
                 send_notification(stock, alert_type, current_price, last_benchmark_price)
                 db.update_alert_state(alert_id, "watching_for_trough", current_price)
-            elif current_price < last_benchmark_price:
+            elif current_price < last_benchmark_price: # A new trough is forming
                 db.update_alert_state(alert_id, "watching_for_trough", current_price)
 
 def send_notification(stock, alert_type, current_price, benchmark_price):
